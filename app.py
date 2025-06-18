@@ -29,6 +29,7 @@ def kirim_ke_google_apps_script(data):
 
 
 @app.route('/', methods=['GET', 'POST'])
+return render_template("form.html", hewan_list=hewan_list, zona_list=zona_list)
 def laporan():
     # Cek apakah file sudah ada
     if os.path.exists(excel_file):
