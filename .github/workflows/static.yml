@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Laporan Penemuan Hewan</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 1rem;
+            margin: 0;
+            background-color: #f8f9fa;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+
+        form {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            max-width: 500px;
+            margin: auto;
+        }
+
+        label {
+            font-weight: bold;
+        }
+
+        select, input[type="number"], input[list], button {
+            padding: 0.5rem;
+            font-size: 1rem;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        .list-hewan {
+            max-width: 500px;
+            margin: 2rem auto;
+            background-color: #fff;
+            padding: 1rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        ul {
+            padding-left: 1.5rem;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Laporan Penemuan Hewan</h1>
+
+    <form method="POST">
+        <label for="nama_hewan">Nama Hewan:</label>
+        <input list="hewan_list" name="nama_hewan" id="nama_hewan" required>
+        <datalist id="hewan_list">
+            {% for hewan in hewan_list %}
+                <option value="{{ hewan }}">
+            {% endfor %}
+        </datalist>
+
+        <label for="zona">Pilih Zona:</label>
+        <select name="zona" id="zona" required>
+            {% for zona in zona_list %}
+                <option value="{{ zona }}">{{ zona }}</option>
+            {% endfor %}
+        </select>
+
+        <label for="jumlah">Jumlah:</label>
+        <input type="number" name="jumlah" id="jumlah" min="1" required>
+
+        <button type="submit">Kirim</button>
+    </form>
+
+    <div class="list-hewan">
+        <h2>Daftar Jenis Hewan yang Sudah Ada:</h2>
+        <ul>
+            {% for hewan in hewan_list %}
+                <li>{{ hewan }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+
+</body>
+</html>
