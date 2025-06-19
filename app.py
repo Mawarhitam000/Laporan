@@ -1,121 +1,77 @@
-from flask import Flask, render_template, request, redirect
+from flask import Flask, render_template, request
 import pandas as pd
-import requests
-import os
 from datetime import datetime
+import os
 
 app = Flask(__name__)
 
-# Daftar awal jenis hewan
-hewan_list_awal = [
-    'burung terkukur', 'babi', 'kadal', 'kambing',
-    'sapi', 'ular', 'burung elang', 'burung merpati'
-]
+CSV_FILE = 'laporan.csv'
 
-# Nama file Excel
-excel_file = 'laporan_hewan.xlsx'
-
-def kirim_ke_google_apps_script(data):
-    url = 'https://script.google.com/macros/s/AKfycbxgfZlUe3QM6qVmsIYZzEoG5Wkt_I3OH9ZEFLUOxSr1LszZauNaP8K7unzVkMZUQqMj/exec'
-    headers = {'Content-Type': 'application/json'}
-    try:
-        response = requests.post(url, json=data)
-        print("Status:", response.status_code)
-        print("Respon:", response.text)
-        return response.status_code == 200
-    except Exception as e:
-        print("Gagal mengirim ke Google Apps Script:", e)
-        return False
-
+# Inisialisasi file jika belum ada
+def initialize_csv():
+    if not os.path.exists(CSV_FILE):
+        df = pd.DataFrame({
+            'jenis hewan': [
+                'burung terkukur', 'babi', 'kadal', 'kambing',
+                'sapi', 'ular', 'burung elang', 'burung merpati'
+            ],
+            'zona 1': [0]*8,
+            'zona 2': [0]*8,
+            'zona 3': [0]*8,
+            'zona 4': [0]*8,
+            'zona 5': [0]*8,
+            'hari': ['']*8,
+            'tanggal': ['']*8,
+            'waktu': ['']*8,
+            'total': [0]*8
+        })
+        df.loc[len(df.index)] = [None]*9 + [0]  # Baris kosong untuk tanggal terakhir
+        df.loc[len(df.index)] = ['TOTAL'] + [0]*8 + [0]  # Baris total
+        df.to_csv(CSV_FILE, index=False)
 
 @app.route('/', methods=['GET', 'POST'])
-return render_template("form.html", hewan_list=hewan_list, zona_list=zona_list)
 def laporan():
-    # Cek apakah file sudah ada
-    if os.path.exists(excel_file):
-        df = pd.read_excel(excel_file)
-        zona_kolom = [col for col in df.columns if col.startswith('zona')]
-    else:
-        zona_kolom = ['zona 1', 'zona 2', 'zona 3', 'zona 4', 'zona 5']
-        df = pd.DataFrame({
-            'jenis hewan': hewan_list_awal,
-            **{z: [0]*len(hewan_list_awal) for z in zona_kolom},
-            'hari': ['']*len(hewan_list_awal),
-            'tanggal': ['']*len(hewan_list_awal),
-            'waktu': ['']*len(hewan_list_awal),
-            'total': [0]*len(hewan_list_awal)
-        })
+    initialize_csv()
+    df = pd.read_csv(CSV_FILE)
+
+    zona_cols = [col for col in df.columns if col.startswith('zona')]
+    hewan_list = df['jenis hewan'].dropna()
+    hewan_list = hewan_list[~hewan_list.str.upper().isin(['TOTAL'])].unique().tolist()
 
     if request.method == 'POST':
-        nama_hewan = request.form['nama_hewan'].strip().lower()
-        zona = request.form['zona'].strip().lower()
+        nama_hewan = request.form['nama_hewan'].strip()
+        zona = request.form['zona'].strip()
         jumlah = int(request.form['jumlah'])
+
+        if zona not in df.columns:
+            df[zona] = 0
+            zona_cols.append(zona)
 
         now = datetime.now()
         hari = now.strftime('%A')
         tanggal = now.strftime('%Y-%m-%d')
         waktu = now.strftime('%H:%M:%S')
 
-        # Hilangkan baris TOTAL jika ada
-        df = df[df['jenis hewan'].str.lower() != 'total']
+        if nama_hewan in df['jenis hewan'].values:
+            idx = df[df['jenis hewan'] == nama_hewan].index[0]
+        else:
+            idx = len(df) - 1  # sebelum baris TOTAL
+            df.loc[idx+1:] = df.loc[idx:].shift(1)
+            df.loc[idx] = [nama_hewan] + [0]*(len(df.columns)-1)
 
-        # Tambah zona baru jika belum ada
-        if zona not in df.columns:
-            df.insert(len(zona_kolom) + 1, zona, [0]*len(df))
-            zona_kolom.append(zona)
-
-        # Tambah hewan baru jika belum ada
-        if nama_hewan not in df['jenis hewan'].str.lower().values:
-            new_row = {
-                'jenis hewan': nama_hewan,
-                **{z: 0 for z in zona_kolom},
-                'hari': '',
-                'tanggal': '',
-                'waktu': '',
-                'total': 0
-            }
-            df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-
-        # Update data
-        idx = df[df['jenis hewan'].str.lower() == nama_hewan].index[0]
-        df.at[idx, zona] += jumlah
+        df.at[idx, zona] = df.at[idx, zona] + jumlah
         df.at[idx, 'hari'] = hari
         df.at[idx, 'tanggal'] = tanggal
         df.at[idx, 'waktu'] = waktu
-        df.at[idx, 'total'] = df.loc[idx, zona_kolom].sum()
+        df.at[idx, 'total'] = df.loc[idx, zona_cols].sum()
 
-        # Hitung ulang baris TOTAL
-        total_zona = {z: df[z].sum() for z in zona_kolom}
-        total_semua = df['total'].sum()
-        total_row = {
-            'jenis hewan': 'TOTAL',
-            **total_zona,
-            'hari': '',
-            'tanggal': '',
-            'waktu': '',
-            'total': total_semua
-        }
+        # Update total keseluruhan
+        df.loc[df['jenis hewan'] == 'TOTAL', zona] = df.loc[df['jenis hewan'] != 'TOTAL', zona].sum()
+        df.loc[df['jenis hewan'] == 'TOTAL', 'total'] = df.loc[df['jenis hewan'] != 'TOTAL', zona_cols].sum().sum()
 
-        df = pd.concat([df, pd.DataFrame([total_row])], ignore_index=True)
-        df.to_excel(excel_file, index=False)
-        
-        # Kirim data ke Google Apps Script
-        kirim_ke_google_apps_script({
-        "jenis_hewan": nama_hewan,
-        "zona": zona,
-        "jumlah": jumlah,
-        "hari": hari,
-        "tanggal": tanggal,
-        "waktu": waktu
-})
+        df.to_csv(CSV_FILE, index=False)
 
-
-        return redirect('/')
-
-    # Tampilkan hewan untuk form (tanpa "total")
-    hewan_list = df[df['jenis hewan'].str.lower() != 'total']['jenis hewan'].tolist()
-
-    return render_template('form.html', hewan_list=hewan_list, zona_list=zona_kolom)
+    return render_template('form.html', hewan_list=hewan_list, zona_list=zona_cols)
 
 if __name__ == '__main__':
     app.run(debug=True)
